@@ -1,0 +1,48 @@
+
+from flask import Flask, request, jsonify
+import redis
+
+app = Flask(__name__)
+redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)  # Adjust host and port if necessary
+
+@app.route('/keyval', methods=['POST'])
+def create_keyval():
+    payload = request.get_json()
+    if not payload or 'storage-key' not in payload or 'storage-val' not in payload:
+        return jsonify({'result': False, 'error': 'Invalid request'}), 400
+    key = payload['storage-key']
+    value = payload['storage-val']
+    if redis_client.exists(key):
+        return jsonify({'result': False, 'error': 'Key already exists'}), 409
+    redis_client.set(key, value)
+    return jsonify({'storage-key': key, 'storage-val': value, 'command': f'CREATE {key}/{value}', 'result': True, 'error': ''}), 200
+
+@app.route('/keyval/<string:key>', methods=['GET'])
+def read_keyval(key):
+    if not redis_client.exists(key):
+        return jsonify({'result': False, 'error': 'Key does not exist'}), 404
+    value = redis_client.get(key).decode('utf-8')
+    return jsonify({'storage-key': key, 'storage-val': value, 'command': f'READ {key}', 'result': True, 'error': ''}), 200
+
+@app.route('/keyval', methods=['PUT'])
+def update_keyval():
+    payload = request.get_json()
+    if not payload or 'storage-key' not in payload or 'storage-val' not in payload:
+        return jsonify({'result': False, 'error': 'Invalid request'}), 400
+    key = payload['storage-key']
+    value = payload['storage-val']
+    if not redis_client.exists(key):
+        return jsonify({'result': False, 'error': 'Key does not exist'}), 404
+    redis_client.set(key, value)
+    return jsonify({'storage-key': key, 'storage-val': value, 'command': f'UPDATE {key}/{value}', 'result': True, 'error': ''}), 200
+
+@app.route('/keyval/<string:key>', methods=['DELETE'])
+def delete_keyval(key):
+    if not redis_client.exists(key):
+        return jsonify({'result': False, 'error': 'Key does not exist'}), 404
+    value = redis_client.get(key).decode('utf-8')
+    redis_client.delete(key)
+    return jsonify({'storage-key': key, 'storage-val': value, 'command': f'DELETE {key}', 'result': True, 'error': ''}), 200
+
+if __name__ == '__main__':
+    app.run(debug=True)
